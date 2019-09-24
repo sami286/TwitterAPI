@@ -1,16 +1,25 @@
 {
-  "name": "followers",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "@sami286/twitterapi",
+  "version": "0.0.1",
+  "description": "Unofficial Twitter API",
+  "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "sami286 <requena244@gmail.com>",
+  "license": "MIT",
   "dependencies": {
     "puppeteer": "latest",
     "minimist": "latest"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sami286/TwitterAPI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sami286/TwitterAPI/issues"
+  },
+  "homepage": "https://github.com/sami286/TwitterAPI#readme"
 }
