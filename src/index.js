@@ -54,7 +54,7 @@ let page;
         case 'like':
             await loginSequence(args);
 
-            await likeFeed('#kotlineverywhere', args.file);
+            await likeFeed(args.feed, args.file);
 
             await browser.close();
             break;
@@ -180,8 +180,18 @@ async function follow(user) {
                 resolve(null);
         }).catch(error => console.log(error));
     });
+    const limitPromise = new Promise(((resolve, reject) => {
+        page.$$('path[d^="M12 2C6.486 2 2 6.486 2 12c0"]')
+        .then(res => {
+            //console.log('limit resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'limit', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    }));
 
-    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise ]);
+    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise ]);
     const result = resultRaw.filter(it => it !== null)[0];
 
     switch (result.type) {
@@ -198,6 +208,10 @@ async function follow(user) {
             await result.btn.click({ delay: 50 });
             await sleep(250);
             return true;
+        case 'limit':
+            console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
+            await sleep(30000);
+            return false;
         default:
             console.log('Error while trying to follow ' + user);
     }
@@ -259,8 +273,18 @@ async function unfollow(user) {
                 resolve(null);
         }).catch(error => console.log(error));
     });
+    const limitPromise = new Promise(((resolve, reject) => {
+        page.$$('path[d^="M12 2C6.486 2 2 6.486 2 12c0"]')
+        .then(res => {
+            //console.log('limit resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'limit', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    }));
 
-    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise ]);
+    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise ]);
     const result = resultRaw.filter(it => it !== null)[0];
 
     switch (result.type) {
@@ -286,6 +310,10 @@ async function unfollow(user) {
             console.log('User ' + user + ' doesn\'t exists');
             await sleep(900);
             break;
+        case 'limit':
+            console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
+            await sleep(30000);
+            return false;
         default:
             console.log('Error while trying to unfollow ' + user);
     }
