@@ -41,10 +41,6 @@ let page;
             await browser.close();
             break;
         case 'unfollow':
-            if (!fs.existsSync(args.file)) {
-                throw new Error('Couldn\'t locate the file ' + args.file + ' containing profiles to unfollow');
-            }
-
             await loginSequence(args);
 
             const followed = fs.readFileSync(args.file, { encoding: 'utf8' }).split("\n");
@@ -68,7 +64,6 @@ let page;
 
             break;
     }
-
 
 })();
 
@@ -222,10 +217,13 @@ async function unfollowUsers(users) {
     console.log('Unfollowing ' + users.length + ' users...');
 
     for (const [ i, user ] of users.entries()) {
-        if (usernameIsCorrect(user))
-            await unfollow(user);
-        else
-            console.log('ERROR: Omitting invalid username >' + user + '< found in line ' + (i + 1) + ' of file ' + file)
+        if (usernameIsCorrect(user)) {
+            const res = await unfollow(user);
+            if (res) //TODO
+                console.log('Replace in file')
+        } else {
+            console.log('ERROR: Omitting invalid username >' + user + '< found in line ' + (i + 1) + ' of the file');
+        }
     }
 }
 
