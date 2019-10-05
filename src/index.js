@@ -43,8 +43,7 @@ let page;
         case 'unfollow':
             await loginSequence(args);
 
-            const followed = fs.readFileSync(args.file, { encoding: 'utf8' }).split("\n");
-            await unfollowUsers(followed);
+            await unfollowUsersFromFile(args.file);
             await browser.close();
             break;
         case 'like':
@@ -95,14 +94,14 @@ async function login(login, show) {
 }
 
 
-async function followFollowersOf(user, file = `data/${user}_followed.txt`) {
+async function followFollowersOf(user, file = `data/followed.txt`) {
     console.log(`Following ${user} followers and login in ${file}...`);
-    const userFollowers = await getFollowers(user);
+    const userFollowers = await getUserFollowers(user);
     let followers = userFollowers;
     let fileFollowers = [];
 
     if (fs.existsSync(file)) {
-        fileFollowers = fs.readFileSync(file, 'utf-8').split('\n');
+        fileFollowers = getUsersFromFile(file, 'followed').map(it => it.user);
         followers = userFollowers.filter(it => !fileFollowers.includes(it));
         console.log(`${userFollowers.length} profiles obtained from user but ${fileFollowers.length} were already contained in the file, following ${followers.length} profiles...`);
     }
@@ -111,7 +110,7 @@ async function followFollowersOf(user, file = `data/${user}_followed.txt`) {
 
         const res = await follow(follower);
         if (res) {
-            fs.appendFileSync(file, follower + '\n');
+            fs.appendFileSync(file, `${follower},followed,${user},${Date.now()}\n`);
             console.log(`(${i + 1}/${followers.length}) ${follower} followed! ${((i + 1) * 100 / followers.length).toFixed(2)}%`)
         }
     }
@@ -119,7 +118,7 @@ async function followFollowersOf(user, file = `data/${user}_followed.txt`) {
     console.log();
 }
 
-async function getFollowers(user) {
+async function getUserFollowers(user) {
     await page.goto(`https://twitter.com/${user}/followers`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid = "UserCell"]');
 
@@ -129,6 +128,19 @@ async function getFollowers(user) {
     console.log(followers.length + ' profiles following ' + user + ' selected');
     await sleep(300);
     return followers;
+}
+
+function getUsersFromFile(file, filter) {
+    return fs.readFileSync(file, 'utf-8').split('\n').map(line => {
+        const data = line.split(',');
+        console.log(data);
+        return {
+            user: data[0],
+            status: data[1],
+            source: data[2],
+            timestamp: data[3]
+        }
+    }).filter(it => !filter || it.status === filter);
 }
 
 async function follow(user) {
@@ -213,8 +225,11 @@ async function follow(user) {
 }
 
 
-async function unfollowUsers(users) {
-    console.log('Unfollowing ' + users.length + ' users...');
+async function unfollowUsersFromFile(file = `data/followed.txt`, source, time) {
+    console.log('Unfollowing ' + file + ' users...');
+
+    const users = getUsersFromFile(file, 'followed').map(it => it.user);
+    console.log(users);
 
     for (const [ i, user ] of users.entries()) {
         if (usernameIsCorrect(user)) {
@@ -289,31 +304,32 @@ async function unfollow(user) {
         case 'follow':
             console.log(user + ' wasn\'t followed');
             await sleep(250);
-            break;
+            return true;
         case 'unfollow':
             await result.btn.click({ delay: 50 });
             await page.waitForSelector('div[data-testid="confirmationSheetConfirm"] > div > span > span');
             await page.click('div[data-testid="confirmationSheetConfirm"] > div > span > span');
             console.log(user + ' unfollowed!');
             await sleep(250);
-            break;
+            return true;
         case 'cancel':
             await result.btn.click();
             await page.waitForSelector('div[data-testid="confirmationSheetConfirm"] > div > span > span');
             await page.click('div[data-testid="confirmationSheetConfirm"] > div > span > span');
             console.log(user + ' follow request cancelled!');
             await sleep(900);
-            break;
+            return true;
         case 'exists':
             console.log('User ' + user + ' doesn\'t exists');
             await sleep(900);
-            break;
+            return true;
         case 'limit':
             console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
             await sleep(30000);
             return false;
         default:
             console.log('Error while trying to unfollow ' + user);
+            return false;
     }
 }
 
