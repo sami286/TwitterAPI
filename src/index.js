@@ -130,76 +130,11 @@ async function getUserFollowers(user) {
     return followers;
 }
 
-function getUsersFromFile(file, filter) {
-    return fs.readFileSync(file, 'utf-8').split('\n').map(line => {
-        const data = line.split(',');
-        console.log(data);
-        return {
-            user: data[0],
-            status: data[1],
-            source: data[2],
-            timestamp: data[3]
-        }
-    }).filter(it => !filter || it.status === filter);
-}
-
 async function follow(user) {
     await page.goto(`https://twitter.com/${user}`, { waitUntil: 'networkidle2' });
     await sleep(200);
 
-    const followPromise = new Promise((resolve, reject) => {
-        page.$$('div[class="css-1dbjc4n"] > div[style="min-width: 77px;"] > div[data-testid$="-follow"] > div > span > span')
-        .then(res => {
-            //console.log('follow resuelta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'follow', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const unfollowPromise = new Promise((resolve, reject) => {
-        page.$$('div[data-testid$="-unfollow"] > div > span > span')
-        .then(res => {
-            //console.log('unfollow resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'unfollow', btn: null });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const cancelPromise = new Promise((resolve, reject) => {
-        page.$$('div[data-testid$="-cancel"] > div > span > span')
-        .then(res => {
-            //console.log('request resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'cancel', btn: null });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const existsPromise = new Promise((resolve, reject) => {
-        page.$$('div.css-901oao.r-1re7ezh.r-1qd0xha.r-a023e6.r-16dba41.r-ad9z0x.r-bcqeeo.r-q4m81j.r-ey96lj.r-qvutc0 > span')
-        .then(res => {
-            //console.log('exists resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'exists', btn: null });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const limitPromise = new Promise(((resolve, reject) => {
-        page.$$('path[d^="M12 2C6.486 2 2 6.486 2 12c0"]')
-        .then(res => {
-            //console.log('limit resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'limit', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    }));
-
-    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise ]);
-    const result = resultRaw.filter(it => it !== null)[0];
+    const result = await waitForProfile();
 
     switch (result.type) {
         case 'unfollow':
@@ -246,59 +181,7 @@ async function unfollow(user) {
     await page.goto(`https://twitter.com/${user}`, { waitUntil: 'networkidle2' });
     await sleep(200);
 
-    const followPromise = new Promise((resolve, reject) => {
-        page.$$('div[class="css-1dbjc4n"] > div[style="min-width: 77px;"] > div[data-testid$="-follow"] > div > span > span')
-        .then(res => {
-            //console.log('follow resuelta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'follow', btn: null });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const unfollowPromise = new Promise((resolve, reject) => {
-        page.$$('div[data-testid$="-unfollow"] > div > span > span')
-        .then(res => {
-            //console.log('unfollow resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'unfollow', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const cancelPromise = new Promise((resolve, reject) => {
-        page.$$('div[data-testid$="-cancel"] > div > span > span')
-        .then(res => {
-            //console.log('request resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'cancel', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const existsPromise = new Promise((resolve, reject) => {
-        page.$$('div.css-901oao.r-1re7ezh.r-1qd0xha.r-a023e6.r-16dba41.r-ad9z0x.r-bcqeeo.r-q4m81j.r-ey96lj.r-qvutc0 > span')
-        .then(res => {
-            //console.log('exists resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'exists', btn: null });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    });
-    const limitPromise = new Promise(((resolve, reject) => {
-        page.$$('path[d^="M12 2C6.486 2 2 6.486 2 12c0"]')
-        .then(res => {
-            //console.log('limit resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'limit', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
-    }));
-
-    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise ]);
-    const result = resultRaw.filter(it => it !== null)[0];
+    const result = await waitForProfile();
 
     switch (result.type) {
         case 'follow':
@@ -372,6 +255,75 @@ async function like(tweet, like = true) {
     }
 }
 
+
+function getUsersFromFile(file, filter) {
+    return fs.readFileSync(file, 'utf-8').split('\n').map(line => {
+        const data = line.split(',');
+        console.log(data);
+        return {
+            user: data[0],
+            status: data[1],
+            source: data[2],
+            timestamp: data[3]
+        }
+    }).filter(it => !filter || it.status === filter);
+}
+
+async function waitForProfile(){
+    const followPromise = new Promise((resolve, reject) => {
+        page.$$('div[class="css-1dbjc4n"] > div[style="min-width: 77px;"] > div[data-testid$="-follow"] > div > span > span')
+        .then(res => {
+            //console.log('follow resuelta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'follow', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    });
+    const unfollowPromise = new Promise((resolve, reject) => {
+        page.$$('div[data-testid$="-unfollow"] > div > span > span')
+        .then(res => {
+            //console.log('unfollow resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'unfollow', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    });
+    const cancelPromise = new Promise((resolve, reject) => {
+        page.$$('div[data-testid$="-cancel"] > div > span > span')
+        .then(res => {
+            //console.log('request resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'cancel', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    });
+    const existsPromise = new Promise((resolve, reject) => {
+        page.$$('div.css-901oao.r-1re7ezh.r-1qd0xha.r-a023e6.r-16dba41.r-ad9z0x.r-bcqeeo.r-q4m81j.r-ey96lj.r-qvutc0 > span')
+        .then(res => {
+            //console.log('exists resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'exists', btn: null });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    });
+    const limitPromise = new Promise(((resolve, reject) => {
+        page.$$('path[d^="M12 2C6.486 2 2 6.486 2 12c0"]')
+        .then(res => {
+            //console.log('limit resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'limit', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    }));
+
+    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise ]);
+    return resultRaw.filter(it => it !== null)[0];
+}
 
 async function pager(selector, attribute) {
     let set = new Set();
