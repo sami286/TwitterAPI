@@ -83,9 +83,10 @@ async function login(login, show) {
     browser = await puppeteer.launch({ headless: !show });
     page = await browser.newPage();
     await page.goto('https://twitter.com/login', { waitUntil: 'networkidle0' });
-    await page.type('input.email-input', login.user, { delay: 25 });
-    await page.type('input.js-password-field', login.pwd, { delay: 25 });
-    await page.click('button.submit', { delay: 30 });
+    await page.type('input[name="session[username_or_email]"]', login.user, { delay: 25 });
+    await page.keyboard.press('Tab', { delay: 40 });
+    await page.keyboard.type(login.pwd, { delay: 25 });
+    await page.keyboard.press('Enter', { delay: 40 });
 
     //Quitar el cuadro de las cookies
     await page.waitForSelector('div[data-testid="tweet"]');
