@@ -155,6 +155,10 @@ async function follow(user) {
             console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
             await sleep(30000);
             return false;
+        case 'block':
+            console.log(user + ' has blocked you...');
+            await sleep(300);
+            return false;
         default:
             console.log('Error while trying to follow ' + user);
     }
@@ -211,6 +215,10 @@ async function unfollow(user) {
             console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
             await sleep(30000);
             return false;
+        case 'block':
+            console.log(user + ' has blocked you...');
+            await sleep(300);
+            return true;
         default:
             console.log('Error while trying to unfollow ' + user);
             return false;
@@ -270,7 +278,7 @@ function getUsersFromFile(file, filter) {
     }).filter(it => !filter || it.status === filter);
 }
 
-async function waitForProfile(){
+async function waitForProfile() {
     const followPromise = new Promise((resolve, reject) => {
         page.$$('div[class="css-1dbjc4n"] > div[style="min-width: 77px;"] > div[data-testid$="-follow"] > div > span > span')
         .then(res => {
@@ -321,8 +329,19 @@ async function waitForProfile(){
                 resolve(null);
         }).catch(error => console.log(error));
     }));
+    const blockPromise = new Promise(((resolve, reject) => {
+        page.$$('a[href="https://support.twitter.com/articles/20172060"] > span')
+        .then(res => {
+            //console.log('block resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'block', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    }));
 
-    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise ]);
+
+    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise, blockPromise ]);
     return resultRaw.filter(it => it !== null)[0];
 }
 
