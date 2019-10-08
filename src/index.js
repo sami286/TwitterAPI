@@ -63,6 +63,8 @@ let page;
             await browser.close();
 
             break;
+        default:
+            break;
     }
 
 })();
@@ -281,7 +283,7 @@ function getUsersFromFile(file) {
 }
 
 async function waitForProfile() {
-    const followPromise = new Promise((resolve, reject) => {
+    const followPromise = new Promise(resolve => {
         page.$$('div[class="css-1dbjc4n"] > div[style="min-width: 77px;"] > div[data-testid$="-follow"] > div > span > span')
             .then(res => {
                 //console.log('follow resuelta ' + res.length);
@@ -291,7 +293,7 @@ async function waitForProfile() {
                     resolve(null);
             }).catch(error => console.log(error));
     });
-    const unfollowPromise = new Promise((resolve, reject) => {
+    const unfollowPromise = new Promise(resolve => {
         page.$$('div[data-testid$="-unfollow"] > div > span > span')
             .then(res => {
                 //console.log('unfollow resuleta ' + res.length);
@@ -301,7 +303,7 @@ async function waitForProfile() {
                     resolve(null);
             }).catch(error => console.log(error));
     });
-    const cancelPromise = new Promise((resolve, reject) => {
+    const cancelPromise = new Promise(resolve => {
         page.$$('div[data-testid$="-cancel"] > div > span > span')
             .then(res => {
                 //console.log('request resuleta ' + res.length);
@@ -311,7 +313,7 @@ async function waitForProfile() {
                     resolve(null);
             }).catch(error => console.log(error));
     });
-    const existsPromise = new Promise((resolve, reject) => {
+    const existsPromise = new Promise(resolve => {
         page.$$('div.css-901oao.r-1re7ezh.r-1qd0xha.r-a023e6.r-16dba41.r-ad9z0x.r-bcqeeo.r-q4m81j.r-ey96lj.r-qvutc0 > span')
             .then(res => {
                 //console.log('exists resuleta ' + res.length);
@@ -321,7 +323,7 @@ async function waitForProfile() {
                     resolve(null);
             }).catch(error => console.log(error));
     });
-    const limitPromise = new Promise(((resolve, reject) => {
+    const limitPromise = new Promise(resolve => {
         page.$$('path[d^="M12 2C6.486 2 2 6.486 2 12c0"]')
             .then(res => {
                 //console.log('limit resuleta ' + res.length);
@@ -330,8 +332,8 @@ async function waitForProfile() {
                 else
                     resolve(null);
             }).catch(error => console.log(error));
-    }));
-    const blockPromise = new Promise(((resolve, reject) => {
+    });
+    const blockPromise = new Promise(resolve => {
         page.$$('a[href="https://support.twitter.com/articles/20172060"] > span')
             .then(res => {
                 //console.log('block resuleta ' + res.length);
@@ -340,8 +342,8 @@ async function waitForProfile() {
                 else
                     resolve(null);
             }).catch(error => console.log(error));
-    }));
-    const suspendedPromise = new Promise(((resolve, reject) => {
+    });
+    const suspendedPromise = new Promise(resolve => {
         page.$$('a[href="https://support.twitter.com/articles/18311"] > span')
             .then(res => {
                 //console.log('suspended resuleta ' + res.length);
@@ -350,8 +352,7 @@ async function waitForProfile() {
                 else
                     resolve(null);
             }).catch(error => console.log(error));
-    }));
-
+    });
 
     const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise, blockPromise, suspendedPromise ]);
     return resultRaw.filter(it => it !== null)[0];
