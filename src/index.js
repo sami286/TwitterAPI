@@ -7,7 +7,7 @@ let page;
 
 (async () => {
     const args = minimist(process.argv.slice(2), {
-        string: [ 'mode', 'user', 'file', 'login_mail', 'login_pwd', 'feed' ],
+        string: [ 'mode', 'user', 'file', 'login_mail', 'login_pwd', 'feed', 'time' ],
         boolean: [ 'show' ],
         alias: {
             show: 's',
@@ -16,6 +16,7 @@ let page;
             file: 'f',
             login_mail: 'l',
             login_pwd: 'p',
+            time: 't'
         },
         default: {
             mode: 'config',
@@ -43,7 +44,7 @@ let page;
         case 'unfollow':
             await loginSequence(args);
 
-            await unfollowUsersFromFile(args.file);
+            await unfollowUsersFromFile(args.file, args.time);
             await browser.close();
             break;
         case 'like':
@@ -102,7 +103,7 @@ async function followFollowersOf(user, file = `data/followed.txt`) {
     let fileFollowers = [];
 
     if (fs.existsSync(file)) {
-        fileFollowers = getUsersFromFile(file, 'followed').map(it => it.user);
+        fileFollowers = getUsersFromFile(file).map(it => it.user);
         followers = userFollowers.filter(it => !fileFollowers.includes(it));
         console.log(`${userFollowers.length} profiles obtained from user but ${fileFollowers.length} were already contained in the file, following ${followers.length} profiles...`);
     }
@@ -165,7 +166,7 @@ async function follow(user) {
 }
 
 
-async function unfollowUsersFromFile(file = `data/followed.txt`, source, time) {
+async function unfollowUsersFromFile(file = `data/followed.txt`, time, source) {
     console.log('Unfollowing ' + file + ' users...');
 
     const users = getUsersFromFile(file)
@@ -267,89 +268,88 @@ async function like(tweet, like = true) {
 }
 
 
-function getUsersFromFile(file, filter) {
+function getUsersFromFile(file) {
     return fs.readFileSync(file, 'utf-8').split('\n').map(line => {
         const data = line.split(',');
-        console.log(data);
         return {
             user: data[0],
             status: data[1],
             source: data[2],
             timestamp: data[3]
         }
-    }).filter(it => !filter || it.status === filter);
+    });
 }
 
 async function waitForProfile() {
     const followPromise = new Promise((resolve, reject) => {
         page.$$('div[class="css-1dbjc4n"] > div[style="min-width: 77px;"] > div[data-testid$="-follow"] > div > span > span')
-        .then(res => {
-            //console.log('follow resuelta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'follow', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
+            .then(res => {
+                //console.log('follow resuelta ' + res.length);
+                if (res.length === 1)
+                    resolve({ type: 'follow', btn: res[0] });
+                else
+                    resolve(null);
+            }).catch(error => console.log(error));
     });
     const unfollowPromise = new Promise((resolve, reject) => {
         page.$$('div[data-testid$="-unfollow"] > div > span > span')
-        .then(res => {
-            //console.log('unfollow resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'unfollow', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
+            .then(res => {
+                //console.log('unfollow resuleta ' + res.length);
+                if (res.length === 1)
+                    resolve({ type: 'unfollow', btn: res[0] });
+                else
+                    resolve(null);
+            }).catch(error => console.log(error));
     });
     const cancelPromise = new Promise((resolve, reject) => {
         page.$$('div[data-testid$="-cancel"] > div > span > span')
-        .then(res => {
-            //console.log('request resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'cancel', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
+            .then(res => {
+                //console.log('request resuleta ' + res.length);
+                if (res.length === 1)
+                    resolve({ type: 'cancel', btn: res[0] });
+                else
+                    resolve(null);
+            }).catch(error => console.log(error));
     });
     const existsPromise = new Promise((resolve, reject) => {
         page.$$('div.css-901oao.r-1re7ezh.r-1qd0xha.r-a023e6.r-16dba41.r-ad9z0x.r-bcqeeo.r-q4m81j.r-ey96lj.r-qvutc0 > span')
-        .then(res => {
-            //console.log('exists resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'exists', btn: null });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
+            .then(res => {
+                //console.log('exists resuleta ' + res.length);
+                if (res.length === 1)
+                    resolve({ type: 'exists', btn: null });
+                else
+                    resolve(null);
+            }).catch(error => console.log(error));
     });
     const limitPromise = new Promise(((resolve, reject) => {
         page.$$('path[d^="M12 2C6.486 2 2 6.486 2 12c0"]')
-        .then(res => {
-            //console.log('limit resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'limit', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
+            .then(res => {
+                //console.log('limit resuleta ' + res.length);
+                if (res.length === 1)
+                    resolve({ type: 'limit', btn: res[0] });
+                else
+                    resolve(null);
+            }).catch(error => console.log(error));
     }));
     const blockPromise = new Promise(((resolve, reject) => {
         page.$$('a[href="https://support.twitter.com/articles/20172060"] > span')
-        .then(res => {
-            //console.log('block resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'block', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
+            .then(res => {
+                //console.log('block resuleta ' + res.length);
+                if (res.length === 1)
+                    resolve({ type: 'block', btn: res[0] });
+                else
+                    resolve(null);
+            }).catch(error => console.log(error));
     }));
     const suspendedPromise = new Promise(((resolve, reject) => {
         page.$$('a[href="https://support.twitter.com/articles/18311"] > span')
-        .then(res => {
-            //console.log('suspended resuleta ' + res.length);
-            if (res.length === 1)
-                resolve({ type: 'suspended', btn: res[0] });
-            else
-                resolve(null);
-        }).catch(error => console.log(error));
+            .then(res => {
+                //console.log('suspended resuleta ' + res.length);
+                if (res.length === 1)
+                    resolve({ type: 'suspended', btn: res[0] });
+                else
+                    resolve(null);
+            }).catch(error => console.log(error));
     }));
 
 
