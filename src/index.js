@@ -168,8 +168,10 @@ async function follow(user) {
 async function unfollowUsersFromFile(file = `data/followed.txt`, source, time) {
     console.log('Unfollowing ' + file + ' users...');
 
-    const users = getUsersFromFile(file, 'followed').map(it => it.user);
-    console.log(users);
+    const users = getUsersFromFile(file)
+        .filter(it => (!source || it.source === source) && (!time || it.time - Date.now() > time * 3600 * 1000))
+        .map(it => it.user);
+    console.log(users.length + ' users selected!\n');
 
     for (const [ i, user ] of users.entries()) {
         if (usernameIsCorrect(user)) {
