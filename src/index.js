@@ -339,9 +339,19 @@ async function waitForProfile() {
                 resolve(null);
         }).catch(error => console.log(error));
     }));
+    const suspendedPromise = new Promise(((resolve, reject) => {
+        page.$$('a[href="https://support.twitter.com/articles/18311"] > span')
+        .then(res => {
+            //console.log('suspended resuleta ' + res.length);
+            if (res.length === 1)
+                resolve({ type: 'suspended', btn: res[0] });
+            else
+                resolve(null);
+        }).catch(error => console.log(error));
+    }));
 
 
-    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise, blockPromise ]);
+    const resultRaw = await Promise.all([ followPromise, unfollowPromise, cancelPromise, existsPromise, limitPromise, blockPromise, suspendedPromise ]);
     return resultRaw.filter(it => it !== null)[0];
 }
 
