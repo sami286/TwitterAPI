@@ -4,8 +4,5 @@ node_modules/
 #Idea files
 .idea/
 
-#Config file containing sensitive info
-src/config
-
 #Data files
 src/data/

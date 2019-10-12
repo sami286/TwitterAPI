@@ -1,63 +1,58 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-const minimist = require('minimist');
+const Configstore = require('configstore');
+const chalk = require('chalk');
+const config = new Configstore('data');
+var inquirer = require('inquirer');
 
 let browser;
 let page;
 
 (async () => {
-    const args = minimist(process.argv.slice(2), {
-        string: [ 'mode', 'user', 'file', 'login_mail', 'login_pwd', 'feed', 'time' ],
-        boolean: [ 'show' ],
-        alias: {
-            show: 's',
-            mode: 'm',
-            user: 'u',
-            file: 'f',
-            login_mail: 'l',
-            login_pwd: 'p',
-            time: 't'
-        },
-        default: {
-            mode: 'config',
-            show: true //TODO Change this for production
-        }
-    });
+    console.log(chalk.bgBlueBright.whiteBright('                         TwitterBot                         '));
 
-    console.log(args);
-    console.log();
+    if (!config.get('user')) {
+        console.log(chalk.redBright('No login details found'));
+        await askLoginDetails();
+    }
 
+    console.log(chalk.yellowBright('Current user: ' + config.get('user')));
+    const args = await askWhatToDo();
 
-    switch (args.mode) {
+    switch (args.option) {
         case 'config':
-            setConfig({ user: args.login_mail, pwd: args.login_pwd });
+            config.set('user', args.user);
+            config.set('pwd', args.pwd);
+            console.log(chalk.greenBright('\nConfig updated!'));
             break;
         case 'follow':
-            if (!usernameIsCorrect(args.user))
-                throw new Error('This Twitter user name cannot exist because it\'s invalid: ' + user);
+            if (!usernameIsCorrect(args.source)) {
+                console.log(chalk.redBright('This Twitter user name cannot exist because it\'s invalid: ' + args.source));
+                return;
+            }
 
-            await loginSequence(args);
+            await login(config.get('user'), config.get('pwd'), args.show);
 
-            await followFollowersOf(args.user, args.file);
+            await followFollowersOf(args.source, args.fileOut);
             await browser.close();
             break;
         case 'unfollow':
-            await loginSequence(args);
+            await login(config.get('user'), config.get('pwd'), args.show);
 
-            await unfollowUsersFromFile(args.file, args.time);
+            await unfollowUsersFromFile(args.fileIn);
             await browser.close();
             break;
         case 'like':
-            await loginSequence(args);
+            await login(config.get('user'), config.get('pwd'), args.show);
 
-            await likeFeed(args.feed, args.file);
+            await likeFeed(args.feed, args.fileOut);
 
             await browser.close();
             break;
         case 'dislike':
-            await loginSequence(args);
+            await login(config.get('user'), config.get('pwd'), args.show);
 
-            const tweets = fs.readFileSync(args.file, 'utf-8').split('\n');
+            const tweets = fs.readFileSync(args.fileIn, 'utf-8').split('\n');
             await dislikeTweets(tweets);
 
             await browser.close();
@@ -69,31 +64,115 @@ let page;
 
 })();
 
-async function loginSequence(args) {
-    if ('login_mail' in args && 'login_pwd' in args) {
-        console.log('Logging in...');
-        await login({ user: args.login_mail, pwd: args.login_pwd }, args.show);
-    } else if (fs.existsSync('config')) {
-        console.log('Logging in with CONFIG details...');
-        const loginInfo = fs.readFileSync('config', 'utf-8');
-        await login(JSON.parse(loginInfo), args.show);
-    } else {
-        throw new Error('No logging details provided by either parameters or configuration')
-    }
+async function askLoginDetails() {
+    const loginQuestions = [ {
+        type: 'input',
+        name: 'user',
+        message: 'Enter your Twitter username or mail:'
+    }, {
+        type: 'password',
+        name: 'pwd',
+        message: 'Enter your Twitter password:'
+    } ];
+
+    const loginDetails = await inquirer.prompt(loginQuestions);
+
+    config.set('user', loginDetails.user);
+    config.set('pwd', loginDetails.pwd);
+
+    console.log(chalk.greenBright('User login details updated!'));
 }
 
-async function login(login, show) {
+async function askWhatToDo() {
+    const actionQuestions = [ {
+        type: 'rawlist',
+        name: 'option',
+        message: 'What do you want to do?',
+        choices: [
+            { name: 'Update login configuration', value: 'config' },
+            { name: 'Follow users', value: 'follow' },
+            { name: 'Unfollow users', value: 'unfollow' },
+            { name: 'Like tweets', value: 'like' },
+            { name: 'Dislike tweets', value: 'dislike' },
+        ]
+    }, {
+        type: 'input',
+        name: 'user',
+        message: 'Enter your Twitter username or mail:',
+        when: (responses) => {
+            return responses.option === 'config';
+        },
+        default: config.get('user'),
+    }, {
+        type: 'password',
+        name: 'pwd',
+        message: 'Enter your Twitter password:',
+        when: (responses) => {
+            return responses.option === 'config';
+        },
+    }, {
+        type: 'input',
+        name: 'source',
+        message: 'Enter a user from which to extract profiles:',
+        when: (responses) => {
+            return responses.option === 'follow';
+        }
+    },{
+        type: 'input',
+        name: 'feed',
+        message: 'Enter a hashtag from which to extract tweets:',
+        when: (responses) => {
+            return responses.option === 'like';
+        }
+    }, {
+        type: 'input',
+        name: 'fileOut',
+        message: 'Enter the file to save the log:',
+        when: (responses) => {
+            return responses.option === 'follow' || responses.option === 'like';
+        },
+        default: (responses) => {
+            if (responses.option === 'follow')
+                return 'data/followed.txt';
+            if (responses.option === 'like')
+                return 'data/liked.txt';
+        }
+    }, {
+        type: 'input',
+        name: 'fileIn',
+        message: 'Enter the file with the saved data:',
+        when: (responses) => {
+            return responses.option === 'unfollow' || responses.option === 'dislike';
+        },
+        default: (responses) => {
+            if (responses.option === 'unfollow')
+                return 'data/followed.txt';
+            if (responses.option === 'dislike')
+                return 'data/liked.txt';
+        }
+    }, {
+        type: 'confirm',
+        name: 'show',
+        message: 'Show browser working?',
+        default: false,
+    }
+    ];
+    const action = await inquirer.prompt(actionQuestions);
+    //console.log(action);
+    return action;
+}
+
+async function login(user, pwd, show) {
     browser = await puppeteer.launch({ headless: !show });
     page = await browser.newPage();
     await page.goto('https://twitter.com/login', { waitUntil: 'networkidle0' });
-    await page.type('input[name="session[username_or_email]"]', login.user, { delay: 25 });
+    await page.type('input[name="session[username_or_email]"]', user, { delay: 25 });
     await page.keyboard.press('Tab', { delay: 40 });
-    await page.keyboard.type(login.pwd, { delay: 25 });
+    await page.keyboard.type(pwd, { delay: 25 });
     await page.keyboard.press('Enter', { delay: 40 });
 
-    //Quitar el cuadro de las cookies
     await page.waitForSelector('div[data-testid="tweet"]');
-    console.log('Logged in as ' + login.user + '!');
+    console.log(chalk.greenBright('Logged in as ' + user + '!'));
     console.log();
 }
 
@@ -368,13 +447,6 @@ async function pager(selector, attribute) {
     return [ ...set ];
 }
 
-function setConfig(info) {
-    if (fs.existsSync('config'))
-        console.log('Overriding saved configuration...');
-    fs.writeFileSync('config', JSON.stringify(info));
-    console.log('Configuration saved!');
-    console.log();
-}
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
