@@ -8,8 +8,12 @@ Of course, use it at your own risk 😉
 
 
 ## STILL WORK IN PROGRESS
-I wouldn't recommend you using it just yet 😅
+To use it you just simply have to:
+1. install Node if you haven't from `https://nodejs.org`
+2. Clone (or download) this repo `git clone https://github.com/sami286/TwitterBot.git`
+3. In the directory, run `npm install` to download all dependencies
+4. Run `node index.js` to start the magic!
+5. The program will guide you through the process from this point on 👍🏿
 
-Please wait until there's a stable release available.
 
-![Work In Progress](https://i.imgur.com/IhqVjHv.png)
+If you find any bug, feel free to submit an issue or send a PR 😝

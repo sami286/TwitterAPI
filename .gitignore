@@ -5,4 +5,4 @@ node_modules/
 .idea/
 
 #Data files
-src/data/
+data/
