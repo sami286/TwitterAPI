@@ -3,7 +3,7 @@ const fs = require('fs');
 const Configstore = require('configstore');
 const chalk = require('chalk');
 const config = new Configstore('data');
-var inquirer = require('inquirer');
+const inquirer = require('inquirer');
 
 let browser;
 let page;
@@ -56,7 +56,10 @@ let page;
             await dislikeTweets(tweets);
 
             await browser.close();
-
+            break;
+        case 'clean':
+            config.clear();
+            console.log(chalk.greenBright('Configuration cleaned!'));
             break;
         default:
             break;
@@ -94,6 +97,7 @@ async function askWhatToDo() {
             { name: 'Unfollow users', value: 'unfollow' },
             { name: 'Like tweets', value: 'like' },
             { name: 'Dislike tweets', value: 'dislike' },
+            { name: 'Delete login information', value: 'clean' },
         ]
     }, {
         type: 'input',
@@ -155,6 +159,9 @@ async function askWhatToDo() {
         name: 'show',
         message: 'Show browser working?',
         default: false,
+        when: (responses) => {
+            return responses.option !== 'config' && responses.option !== 'clean';
+        }
     }
     ];
     const action = await inquirer.prompt(actionQuestions);
