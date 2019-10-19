@@ -55,21 +55,20 @@ let db;
         case 'unfollow':
             await login(config.get('user'), config.get('pwd'), args.show);
 
-            await unfollowUsersFromFile(args.fileIn);
+            await unfollowUsers();
             await browser.close();
             break;
         case 'like':
             await login(config.get('user'), config.get('pwd'), args.show);
 
-            await likeFeed(args.feed, args.fileOut);
+            await likeFeed(args.feed);
 
             await browser.close();
             break;
         case 'dislike':
             await login(config.get('user'), config.get('pwd'), args.show);
 
-            const tweets = fs.readFileSync(args.fileIn, 'utf-8').split('\n');
-            await dislikeTweets(tweets);
+            await dislikeTweets();
 
             await browser.close();
             break;
@@ -176,7 +175,7 @@ async function login(user, pwd, show) {
 async function followFollowersOf(user) {
     console.log(`Following ${user} followers...`);
 
-    let fileFollowers = await getUsersFromFile(`status IN ('followed', 'unfollowed')`);
+    let fileFollowers = await getUsersFromDB(`status IN ('followed', 'unfollowed')`);
     fileFollowers = fileFollowers.map(it => it.url);
 
     let userFollowers = await getUserFollowers(user);
@@ -186,7 +185,7 @@ async function followFollowersOf(user) {
     for (const [ i, follower ] of userFollowers.entries()) {
         const res = await follow(follower);
         if (res) {
-            db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("followed", ?, ?, ?);', follower, user, Date.now());
+            await db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("followed", ?, ?, ?);', follower, user, Date.now());
             console.log(`(${i + 1}/${userFollowers.length}) ${follower} followed! ${((i + 1) * 100 / userFollowers.length).toFixed(2)}%`)
         }
     }
@@ -240,27 +239,24 @@ async function follow(user) {
 }
 
 
-async function unfollowUsersFromFile(file = `data/followed.txt`, time, source) {
-    console.log('Unfollowing ' + file + ' users...');
+async function unfollowUsers(time, source) {
+    console.log('Unfollowing ' + source + ' users...');
 
-    const users = getUsersFromFile(file)
-        .filter(it => (!source || it.source === source) && (!time || it.time - Date.now() > time * 3600 * 1000))
-        .map(it => it.user);
+    const users = (await getUsersFromDB('status = "followed"'));
+    //.filter(it => (!source || it.source === source) && (!time || it.time - Date.now() > time * 3600 * 1000))
+    //TODO Filter in the SQL query
     console.log(users.length + ' users selected!\n');
 
-    for (const [ i, user ] of users.entries()) {
-        if (usernameIsCorrect(user)) {
-            const res = await unfollow(user);
-            if (res) //TODO
-                console.log('Replace in file')
-        } else {
-            console.log('ERROR: Omitting invalid username >' + user + '< found in line ' + (i + 1) + ' of the file');
+    for (const user of users) {
+        const res = await unfollow(user.url);
+        if (res) {
+            await db.exec('UPDATE interactions SET status = "unfollowed" WHERE _ID = ' + user.id);
         }
     }
 }
 
 async function unfollow(user) {
-    await page.goto(`https://twitter.com/${user}`, { waitUntil: 'networkidle2' });
+    await page.goto(user, { waitUntil: 'networkidle2' });
     await sleep(200);
 
     const result = await waitForProfile();
@@ -303,7 +299,7 @@ async function unfollow(user) {
 }
 
 
-async function likeFeed(feed, file = `data/${feed}_liked.txt`) {
+async function likeFeed(feed) {
     const url = 'https://twitter.com/' + feed.replace('#', 'hashtag/');
     await page.goto(url, { waitUntil: 'networkidle2' });
     await page.waitForSelector('div[data-testid="tweet"]');
@@ -312,17 +308,19 @@ async function likeFeed(feed, file = `data/${feed}_liked.txt`) {
     for (const [ i, tweet ] of totalTweets.entries()) {
         const res = await like('https://twitter.com' + tweet);
         if (res) {
-            fs.appendFileSync(file, tweet + '\n');
+            await db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("liked", ?, ?, ?);', 'https://twitter.com' + tweet, url, Date.now());
             console.log(`(${i + 1}/${totalTweets.length}) ${tweet} liked! ${((i + 1) * 100 / totalTweets.length).toFixed(2)}%`)
         }
     }
 }
 
-async function dislikeTweets(tweets) {
+async function dislikeTweets() {
+    const tweets = (await getUsersFromDB('status = "liked"'));
     for (const [ i, tweet ] of tweets.entries()) {
-        const res = await like('https://twitter.com' + tweet, false);
+        const res = await like(tweet.url, false);
         if (res) {
-            console.log(`(${i + 1}/${tweets.length}) ${tweet} disliked! ${((i + 1) * 100 / tweets.length).toFixed(2)}%`)
+            await db.exec('UPDATE interactions SET status = "unliked" WHERE _ID = ' + tweet.id);
+            console.log(`(${i + 1}/${tweets.length}) ${tweet.url} disliked! ${((i + 1) * 100 / tweets.length).toFixed(2)}%`)
         }
     }
 }
@@ -342,13 +340,13 @@ async function like(tweet, like = true) {
 }
 
 
-async function getUsersFromFile(filter) {
+async function getUsersFromDB(filter) {
     const sql = 'SELECT * FROM interactions' + (filter ? ' WHERE ' + filter + ';' : ';');
     const interactions = [];
     return new Promise((resolve) => {
         db.each(sql, [], (err, row) => {
             interactions.push({
-                id: row.id,
+                id: row._ID,
                 status: row.status,
                 url: row.url,
                 source: row.source,
