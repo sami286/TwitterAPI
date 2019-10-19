@@ -1,4 +1,4 @@
-# Unofficial Twitter API
+# Unofficial Twitter Bot
 
 Hi everyone! Let me present my first ever Open Source project 😋
 
@@ -9,7 +9,7 @@ Of course, use it at your own risk 😉
 
 ## STILL WORK IN PROGRESS
 To use it you just simply have to:
-1. install Node if you haven't from `https://nodejs.org`
+1. Install Node if you haven't from `https://nodejs.org`
 2. Clone (or download) this repo `git clone https://github.com/sami286/TwitterBot.git`
 3. In the directory, run `npm install` to download all dependencies
 4. Run `node index.js` to start the magic!

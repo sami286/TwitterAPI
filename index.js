@@ -4,9 +4,11 @@ const Configstore = require('configstore');
 const chalk = require('chalk');
 const config = new Configstore('data');
 const inquirer = require('inquirer');
+const sql = require('sqlite3').verbose();
 
 let browser;
 let page;
+let db;
 
 (async () => {
     console.log(chalk.bgBlueBright.whiteBright('                         TwitterBot                         '));
@@ -14,6 +16,20 @@ let page;
     if (!config.get('user')) {
         console.log(chalk.redBright('No login details found'));
         await askLoginDetails();
+    }
+
+    if (!fs.existsSync('data.db')) {
+        db = new sql.Database('data.db');
+        db.serialize(() => {
+            db.run('CREATE TABLE interactions (' +
+                '_ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,' +
+                'status TEXT NOT NULL,' +
+                'url TEXT NOT NULL,' +
+                'source TEXT NOT NULL,' +
+                'timestamp INTEGER NOT NULL )');
+        });
+    } else {
+        db = new sql.Database('data.db');
     }
 
     console.log(chalk.yellowBright('Current user: ' + config.get('user')));
@@ -33,7 +49,7 @@ let page;
 
             await login(config.get('user'), config.get('pwd'), args.show);
 
-            await followFollowersOf(args.source, args.fileOut);
+            await followFollowersOf('https://twitter.com/' + args.source);
             await browser.close();
             break;
         case 'unfollow':
@@ -121,38 +137,12 @@ async function askWhatToDo() {
         when: (responses) => {
             return responses.option === 'follow';
         }
-    },{
+    }, {
         type: 'input',
         name: 'feed',
         message: 'Enter a hashtag from which to extract tweets:',
         when: (responses) => {
             return responses.option === 'like';
-        }
-    }, {
-        type: 'input',
-        name: 'fileOut',
-        message: 'Enter the file to save the log:',
-        when: (responses) => {
-            return responses.option === 'follow' || responses.option === 'like';
-        },
-        default: (responses) => {
-            if (responses.option === 'follow')
-                return 'data/followed.txt';
-            if (responses.option === 'like')
-                return 'data/liked.txt';
-        }
-    }, {
-        type: 'input',
-        name: 'fileIn',
-        message: 'Enter the file with the saved data:',
-        when: (responses) => {
-            return responses.option === 'unfollow' || responses.option === 'dislike';
-        },
-        default: (responses) => {
-            if (responses.option === 'unfollow')
-                return 'data/followed.txt';
-            if (responses.option === 'dislike')
-                return 'data/liked.txt';
         }
     }, {
         type: 'confirm',
@@ -162,8 +152,7 @@ async function askWhatToDo() {
         when: (responses) => {
             return responses.option !== 'config' && responses.option !== 'clean';
         }
-    }
-    ];
+    } ];
     const action = await inquirer.prompt(actionQuestions);
     //console.log(action);
     return action;
@@ -184,36 +173,33 @@ async function login(user, pwd, show) {
 }
 
 
-async function followFollowersOf(user, file = `data/followed.txt`) {
-    console.log(`Following ${user} followers and login in ${file}...`);
-    const userFollowers = await getUserFollowers(user);
-    let followers = userFollowers;
-    let fileFollowers = [];
+async function followFollowersOf(user) {
+    console.log(`Following ${user} followers...`);
 
-    if (fs.existsSync(file)) {
-        fileFollowers = getUsersFromFile(file).map(it => it.user);
-        followers = userFollowers.filter(it => !fileFollowers.includes(it));
-        console.log(`${userFollowers.length} profiles obtained from user but ${fileFollowers.length} were already contained in the file, following ${followers.length} profiles...`);
-    }
+    let fileFollowers = await getUsersFromFile(`status IN ('followed', 'unfollowed')`);
+    fileFollowers = fileFollowers.map(it => it.url);
 
-    for (const [ i, follower ] of followers.entries()) {
+    let userFollowers = await getUserFollowers(user);
+    userFollowers = userFollowers.filter(it => !fileFollowers.includes(it));
 
+    console.log(`${userFollowers.length} profiles obtained from user (${fileFollowers.length} were already contained in the DB)`);
+    for (const [ i, follower ] of userFollowers.entries()) {
         const res = await follow(follower);
         if (res) {
-            fs.appendFileSync(file, `${follower},followed,${user},${Date.now()}\n`);
-            console.log(`(${i + 1}/${followers.length}) ${follower} followed! ${((i + 1) * 100 / followers.length).toFixed(2)}%`)
+            db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("followed", ?, ?, ?);', follower, user, Date.now());
+            console.log(`(${i + 1}/${userFollowers.length}) ${follower} followed! ${((i + 1) * 100 / userFollowers.length).toFixed(2)}%`)
         }
     }
-    console.log(followers.length + ' followers of ' + user + ' followed, logged usernames at: ' + file);
+    console.log(userFollowers.length + ' followers of ' + user + ' followed, logged usernames at DB');
     console.log();
 }
 
 async function getUserFollowers(user) {
-    await page.goto(`https://twitter.com/${user}/followers`, { waitUntil: 'networkidle0' });
+    await page.goto(user + '/followers', { waitUntil: 'networkidle0' });
     await page.waitForSelector('[data-testid = "UserCell"]');
 
     const followersRaw = await pager('[data-testid = "UserCell"] > div > div:nth-child(2) > div > div > a', 'href');
-    const followers = followersRaw.map(it => it.replace('/', ''));
+    const followers = followersRaw.map(it => 'https://twitter.com' + it);
 
     console.log(followers.length + ' profiles following ' + user + ' selected');
     await sleep(300);
@@ -221,7 +207,7 @@ async function getUserFollowers(user) {
 }
 
 async function follow(user) {
-    await page.goto(`https://twitter.com/${user}`, { waitUntil: 'networkidle2' });
+    await page.goto(user, { waitUntil: 'networkidle2' });
     await sleep(200);
 
     const result = await waitForProfile();
@@ -356,15 +342,19 @@ async function like(tweet, like = true) {
 }
 
 
-function getUsersFromFile(file) {
-    return fs.readFileSync(file, 'utf-8').split('\n').map(line => {
-        const data = line.split(',');
-        return {
-            user: data[0],
-            status: data[1],
-            source: data[2],
-            timestamp: data[3]
-        }
+async function getUsersFromFile(filter) {
+    const sql = 'SELECT * FROM interactions' + (filter ? ' WHERE ' + filter + ';' : ';');
+    const interactions = [];
+    return new Promise((resolve) => {
+        db.each(sql, [], (err, row) => {
+            interactions.push({
+                id: row.id,
+                status: row.status,
+                url: row.url,
+                source: row.source,
+                timestamp: row.timestamp
+            });
+        }, () => resolve(interactions));
     });
 }
 
