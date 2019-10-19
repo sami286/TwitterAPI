@@ -20,7 +20,7 @@ let db;
 
     if (!fs.existsSync('data.db')) {
         db = new sql.Database('data.db');
-        db.serialize(() => {
+        await db.serialize(() => {
             db.run('CREATE TABLE interactions (' +
                 '_ID INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,' +
                 'status TEXT NOT NULL,' +
@@ -28,11 +28,12 @@ let db;
                 'source TEXT NOT NULL,' +
                 'timestamp INTEGER NOT NULL )');
         });
+        console.log(chalk.yellowBright('[!] DB file created at ') + chalk.yellow('(data.db)'));
     } else {
         db = new sql.Database('data.db');
     }
 
-    console.log(chalk.yellowBright('Current user: ' + config.get('user')));
+    console.log(chalk.yellowBright('[!] Current user: ' + config.get('user')));
     const args = await askWhatToDo();
 
     switch (args.option) {
