@@ -5,13 +5,15 @@ const chalk = require('chalk');
 const config = new Configstore('data');
 const inquirer = require('inquirer');
 const sql = require('sqlite3').verbose();
+const progress = require('cli-progress');
 
 let browser;
 let page;
 let db;
 
 (async () => {
-    console.log(chalk.bgBlueBright.whiteBright('                         TwitterBot                         '));
+    process.stdout.write('\033c');
+    console.log(chalk.bgBlueBright.whiteBright('                                       TwitterBot                                       '));
 
     if (!config.get('user')) {
         console.log(chalk.redBright('No login details found'));
@@ -177,6 +179,8 @@ async function askWhatToDo() {
 }
 
 async function login(user, pwd, show) {
+    console.log(chalk.yellowBright('\nLogging in as ') + chalk.yellow(user) + chalk.yellowBright('...'));
+
     browser = await puppeteer.launch({ headless: !show });
     page = await browser.newPage();
     await page.goto('https://twitter.com/login', { waitUntil: 'networkidle0' });
@@ -192,7 +196,7 @@ async function login(user, pwd, show) {
 
 
 async function followFollowersOf(user) {
-    console.log(`Following ${user} followers...`);
+    console.log(chalk.yellowBright('\nGathering ') + chalk.yellow(user) + chalk.yellowBright(' followers...'));
 
     let fileFollowers = await getUsersFromDB(`status IN ('followed', 'unfollowed')`);
     fileFollowers = fileFollowers.map(it => it.url);
@@ -200,14 +204,17 @@ async function followFollowersOf(user) {
     let userFollowers = await getUserFollowers(user);
     userFollowers = userFollowers.filter(it => !fileFollowers.includes(it));
 
-    console.log(`${userFollowers.length} profiles obtained from user (${fileFollowers.length} were already contained in the DB)`);
+    console.log(chalk.greenBright(`${userFollowers.length} profiles obtained! `) + chalk.green(`(${fileFollowers.length} were already contained in the DB)\n\n`));
+    const bar = getProgressBar();
+    bar.start(userFollowers.length, 0, { target: 'Initiating...' });
     for (const [ i, follower ] of userFollowers.entries()) {
         const res = await follow(follower);
+        bar.update(i, { target: 'Current: ' + chalk.yellow(follower.replace('https://twitter.com/', '')) });
         if (res) {
             await db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("followed", ?, ?, ?);', follower, user, Date.now());
-            console.log(`(${i + 1}/${userFollowers.length}) ${follower} followed! ${((i + 1) * 100 / userFollowers.length).toFixed(2)}%`)
         }
     }
+    bar.stop();
     console.log(userFollowers.length + ' followers of ' + user + ' followed, logged usernames at DB');
     console.log();
 }
@@ -219,7 +226,6 @@ async function getUserFollowers(user) {
     const followersRaw = await pager('[data-testid = "UserCell"] > div > div:nth-child(2) > div > div > a', 'href');
     const followers = followersRaw.map(it => 'https://twitter.com' + it);
 
-    console.log(followers.length + ' profiles following ' + user + ' selected');
     await sleep(300);
     return followers;
 }
@@ -394,7 +400,7 @@ async function retweet(tweet, retweet = true) {
     if (rtBtn) {
         await rtBtn.click({ delay: 250 });
         await sleep(100);
-        await page.click(`div[data-testid="${mode}Confirm"] > div`, {delay: 200});
+        await page.click(`div[data-testid="${mode}Confirm"] > div`, { delay: 200 });
         return true;
     } else {
         console.log(`The tweet ${tweet} was already ${mode}ed`);
@@ -500,11 +506,18 @@ async function pager(selector, attribute) {
     for (let i = 0; i < 10; i++) {
         const elems = await page.evaluate((selec, attr) => [ ...document.querySelectorAll(selec) ].map(it => it.attributes[attr].value), selector, attribute);
         set = new Set([ ...set, ...elems ]);
-        await scroll(1200);
+        await scroll(1000);
     }
     return [ ...set ];
 }
 
+function getProgressBar() {
+    return new progress.SingleBar({
+        format: chalk.yellowBright('{bar} {percentage}% | {value}/{total} | ~{eta_formatted} left | {target}'),
+        align: 'left',
+        hideCursor: true
+    }, progress.Presets.shades_classic);
+}
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
