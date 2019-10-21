@@ -73,6 +73,20 @@ let db;
 
             await browser.close();
             break;
+        case 'retweet':
+            await login(config.get('user'), config.get('pwd'), args.show);
+
+            await retweetFeed(args.feed);
+
+            await browser.close();
+            break;
+        case 'unretweet':
+            await login(config.get('user'), config.get('pwd'), args.show);
+
+            await unretweetTweets();
+
+            await browser.close();
+            break;
         case 'clean':
             config.clear();
             console.log(chalk.greenBright('Configuration cleaned!'));
@@ -113,6 +127,8 @@ async function askWhatToDo() {
             { name: 'Unfollow users', value: 'unfollow' },
             { name: 'Like tweets', value: 'like' },
             { name: 'Dislike tweets', value: 'dislike' },
+            { name: 'Retweet tweets', value: 'retweet' },
+            { name: 'Un-Retweet tweets', value: 'unretweet' },
             { name: 'Delete login information', value: 'clean' },
         ]
     }, {
@@ -142,7 +158,7 @@ async function askWhatToDo() {
         name: 'feed',
         message: 'Enter a hashtag from which to extract tweets:',
         when: (responses) => {
-            return responses.option === 'like';
+            return responses.option === 'like' || responses.option === 'retweet';
         }
     }, {
         type: 'confirm',
@@ -336,6 +352,50 @@ async function like(tweet, like = true) {
         return true;
     } else {
         console.log('The tweet ' + tweet + ' was already ' + (like ? 'liked' : 'disliked'));
+        return false;
+    }
+}
+
+
+async function retweetFeed(feed) {
+    const url = 'https://twitter.com/' + feed.replace('#', 'hashtag/');
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.waitForSelector('div[data-testid="tweet"]');
+
+    const totalTweets = await pager('div[data-testid="tweet"] > div:nth-child(2) > div > div > a', 'href');
+    for (const [ i, tweet ] of totalTweets.entries()) {
+        const res = await retweet('https://twitter.com' + tweet);
+        if (res) {
+            await db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("retweeted", ?, ?, ?);', 'https://twitter.com' + tweet, url, Date.now());
+            console.log(`(${i + 1}/${totalTweets.length}) ${tweet} liked! ${((i + 1) * 100 / totalTweets.length).toFixed(2)}%`)
+        }
+    }
+}
+
+async function unretweetTweets() {
+    const tweets = (await getUsersFromDB('status = "retweeted"'));
+    for (const [ i, tweet ] of tweets.entries()) {
+        const res = await retweet(tweet.url, false);
+        if (res) {
+            await db.exec('UPDATE interactions SET status = "unretweeted" WHERE _ID = ' + tweet.id);
+            console.log(`(${i + 1}/${tweets.length}) ${tweet.url} unretweeted! ${((i + 1) * 100 / tweets.length).toFixed(2)}%`)
+        }
+    }
+}
+
+async function retweet(tweet, retweet = true) {
+    await page.goto(tweet, { waitUntil: 'networkidle2' });
+
+    const actions = await page.waitForSelector(`div[role="group"]`);
+    const mode = retweet ? 'retweet' : 'unretweet';
+    const rtBtn = await actions.$(`div[data-testid="${mode}"]`);
+    if (rtBtn) {
+        await rtBtn.click({ delay: 250 });
+        await sleep(100);
+        await page.click(`div[data-testid="${mode}Confirm"] > div`, {delay: 200});
+        return true;
+    } else {
+        console.log(`The tweet ${tweet} was already ${mode}ed`);
         return false;
     }
 }
