@@ -51,40 +51,42 @@ let db;
             await login(config.get('user'), config.get('pwd'), args.show);
 
             await followFollowersOf('https://twitter.com/' + args.source);
+            await db.close();
             await browser.close();
             break;
         case 'unfollow':
             await login(config.get('user'), config.get('pwd'), args.show);
 
             await unfollowUsers();
+            await db.close();
             await browser.close();
             break;
         case 'like':
             await login(config.get('user'), config.get('pwd'), args.show);
 
             await likeFeed(args.feed);
-
+            await db.close();
             await browser.close();
             break;
         case 'dislike':
             await login(config.get('user'), config.get('pwd'), args.show);
 
             await dislikeTweets();
-
+            await db.close();
             await browser.close();
             break;
         case 'retweet':
             await login(config.get('user'), config.get('pwd'), args.show);
 
             await retweetFeed(args.feed);
-
+            await db.close();
             await browser.close();
             break;
         case 'unretweet':
             await login(config.get('user'), config.get('pwd'), args.show);
 
             await unretweetTweets();
-
+            await db.close();
             await browser.close();
             break;
         case 'clean':
