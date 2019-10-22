@@ -209,14 +209,13 @@ async function followFollowersOf(user) {
     bar.start(userFollowers.length, 0, { target: 'Initiating...' });
     for (const [ i, follower ] of userFollowers.entries()) {
         const res = await follow(follower);
-        bar.update(i, { target: 'Current: ' + chalk.yellow(follower.replace('https://twitter.com/', '')) });
+        bar.update(i + 1, { target: 'Current: ' + chalk.yellow(follower.replace('https://twitter.com/', '')) });
         if (res) {
             await db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("followed", ?, ?, ?);', follower, user, Date.now());
         }
     }
     bar.stop();
-    console.log(userFollowers.length + ' followers of ' + user + ' followed, logged usernames at DB');
-    console.log();
+    console.log('\n' + chalk.greenBright(userFollowers.length + ' followers of ') + chalk.green(user) + chalk.greenBright(' followed, usernames logged at DB\n'));
 }
 
 async function getUserFollowers(user) {
@@ -238,24 +237,24 @@ async function follow(user) {
 
     switch (result.type) {
         case 'unfollow':
-            console.log('Already following ' + user);
+            //console.log('Already following ' + user);
             return false;
         case 'cancel':
-            console.log('Follow request already sent to ' + user);
+            //console.log('Follow request already sent to ' + user);
             return false;
         case 'exists':
-            console.log('User ' + user + ' doesn\'t exists');
+            //console.log('User ' + user + ' doesn\'t exists');
             return false;
         case 'follow':
             await result.btn.click({ delay: 50 });
             await sleep(250);
             return true;
         case 'limit':
-            console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
+            //console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
             await sleep(30000);
             return false;
         case 'block':
-            console.log(user + ' has blocked you...');
+            //console.log(user + ' has blocked you...');
             await sleep(300);
             return false;
         default:
@@ -265,19 +264,22 @@ async function follow(user) {
 
 
 async function unfollowUsers(time, source) {
-    console.log('Unfollowing ' + source + ' users...');
-
-    const users = (await getUsersFromDB('status = "followed"'));
+    const users = await getUsersFromDB('status = "followed"');
+    console.log(chalk.yellowBright('Unfollowing ' + users.length + ' users...\n\n'));
     //.filter(it => (!source || it.source === source) && (!time || it.time - Date.now() > time * 3600 * 1000))
     //TODO Filter in the SQL query
-    console.log(users.length + ' users selected!\n');
 
-    for (const user of users) {
+    const bar = getProgressBar();
+    bar.start(users.length, 0, { target: 'Initiating...' });
+    for (const [ i, user ] of users.entries()) {
         const res = await unfollow(user.url);
+        bar.update(i + 1, { target: 'Current: ' + chalk.yellow(user.url.replace('https://twitter.com/', '')) });
         if (res) {
             await db.exec('UPDATE interactions SET status = "unfollowed" WHERE _ID = ' + user.id);
         }
     }
+    bar.stop();
+    console.log('\n' + chalk.greenBright(userFollowers.length + ' profiles unfollowed! ') + chalk.green('(DB updated)\n'));
 }
 
 async function unfollow(user) {
@@ -288,33 +290,33 @@ async function unfollow(user) {
 
     switch (result.type) {
         case 'follow':
-            console.log(user + ' wasn\'t followed');
+            //console.log(user + ' wasn\'t followed');
             await sleep(250);
             return true;
         case 'unfollow':
             await result.btn.click({ delay: 50 });
             await page.waitForSelector('div[data-testid="confirmationSheetConfirm"] > div > span > span');
             await page.click('div[data-testid="confirmationSheetConfirm"] > div > span > span');
-            console.log(user + ' unfollowed!');
+            //console.log(user + ' unfollowed!');
             await sleep(250);
             return true;
         case 'cancel':
             await result.btn.click();
             await page.waitForSelector('div[data-testid="confirmationSheetConfirm"] > div > span > span');
             await page.click('div[data-testid="confirmationSheetConfirm"] > div > span > span');
-            console.log(user + ' follow request cancelled!');
+            //console.log(user + ' follow request cancelled!');
             await sleep(900);
             return true;
         case 'exists':
-            console.log('User ' + user + ' doesn\'t exists');
+            //console.log('User ' + user + ' doesn\'t exists');
             await sleep(900);
             return true;
         case 'limit':
-            console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
+            //console.log('\nTwitter actions limit reached! Waiting 30 seconds before continuing...');
             await sleep(30000);
             return false;
         case 'block':
-            console.log(user + ' has blocked you...');
+            //console.log(user + ' has blocked you...');
             await sleep(300);
             return true;
         default:
@@ -325,29 +327,41 @@ async function unfollow(user) {
 
 
 async function likeFeed(feed) {
+    console.log(chalk.yellowBright('\nGathering ') + chalk.yellow(feed) + chalk.yellowBright(' tweets...'));
+
     const url = 'https://twitter.com/' + feed.replace('#', 'hashtag/');
     await page.goto(url, { waitUntil: 'networkidle2' });
     await page.waitForSelector('div[data-testid="tweet"]');
 
     const totalTweets = await pager('div[data-testid="tweet"] > div:nth-child(2) > div > div > a', 'href');
+    console.log(chalk.yellowBright('Collected ') + chalk.yellow(totalTweets.length) + chalk.yellowBright(' tweets! Disliking...\n\n'));
+    const bar = getProgressBar();
+    bar.start(totalTweets.length, 0, { target: 'Initiating...' });
     for (const [ i, tweet ] of totalTweets.entries()) {
+        bar.update(i + 1, { target: 'Current: ' + chalk.yellow(tweet.replace('status/', '')) });
         const res = await like('https://twitter.com' + tweet);
         if (res) {
             await db.run('INSERT INTO interactions(status, url, source, timestamp) VALUES("liked", ?, ?, ?);', 'https://twitter.com' + tweet, url, Date.now());
-            console.log(`(${i + 1}/${totalTweets.length}) ${tweet} liked! ${((i + 1) * 100 / totalTweets.length).toFixed(2)}%`)
         }
     }
+    bar.stop();
+    console.log('\n' + chalk.greenBright(totalTweets.length + ' tweets liked! ') + chalk.green('(DB updated)\n'));
 }
 
 async function dislikeTweets() {
-    const tweets = (await getUsersFromDB('status = "liked"'));
+    const tweets = await getUsersFromDB('status = "liked"');
+    console.log(chalk.yellowBright('Disliking ' + tweets.length + ' tweets...\n\n'));
+    const bar = getProgressBar();
+    bar.start(tweets.length, 0, { target: 'Initiating...' });
     for (const [ i, tweet ] of tweets.entries()) {
+        bar.update(i + 1, { target: 'Current: ' + chalk.yellow(tweet.url.replace('https://twitter.com', '').replace('status/', '')) });
         const res = await like(tweet.url, false);
         if (res) {
             await db.exec('UPDATE interactions SET status = "unliked" WHERE _ID = ' + tweet.id);
-            console.log(`(${i + 1}/${tweets.length}) ${tweet.url} disliked! ${((i + 1) * 100 / tweets.length).toFixed(2)}%`)
         }
     }
+    bar.stop();
+    console.log('\n' + chalk.greenBright(tweets.length + ' tweets disliked! ') + chalk.green('(DB updated)\n'));
 }
 
 async function like(tweet, like = true) {
@@ -359,8 +373,8 @@ async function like(tweet, like = true) {
         await likeBtn.click({ delay: 250 });
         return true;
     } else {
-        console.log('The tweet ' + tweet + ' was already ' + (like ? 'liked' : 'disliked'));
-        return false;
+        //console.log('The tweet ' + tweet + ' was already ' + (like ? 'liked' : 'disliked'));
+        return true;
     }
 }
 
