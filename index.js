@@ -424,7 +424,7 @@ async function retweet(tweet, retweet = true) {
 
 
 async function getUsersFromDB(filter) {
-    const sql = 'SELECT * FROM interactions' + (filter ? ' WHERE ' + filter + ';' : ';');
+    const sql = 'SELECT * FROM interactions' + (filter ? ' WHERE ' + filter : '') + ' ORDER BY timestamp ASC;';
     const interactions = [];
     return new Promise((resolve) => {
         db.each(sql, [], (err, row) => {
